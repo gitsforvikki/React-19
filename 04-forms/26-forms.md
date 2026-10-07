@@ -1,93 +1,34 @@
 # Lesson 26 — Forms in React
 
-## 1. Why Forms Matter
+React forms are built on normal HTML forms.
 
-Forms are one of the most common ways users send information to an application.
+The main things to understand are:
 
-Examples:
-
-- login and signup
-- search
-- profile editing
-- checkout
-- job applications
-- filters
-- comments and messages
-
-A React form usually combines:
-
-```text
-input values
-   +
-validation
-   +
-submission
-   +
-pending/error/success UI
-```
-
-Before React 19 form Actions, React applications commonly handled all of these pieces manually. React 19 adds better primitives, but understanding normal form behavior is still essential.
+- controlled inputs
+- uncontrolled inputs
+- form submission
+- FormData
+- basic validation
+- pending and error UI
 
 ---
 
-# 2. Native HTML Form First
+## 1. Controlled Form
 
-A normal HTML form:
-
-```html
-<form>
-  <label>
-    Email
-    <input
-      name="email"
-      type="email"
-    />
-  </label>
-
-  <button type="submit">
-    Submit
-  </button>
-</form>
-```
-
-Important concepts:
-
-- `form` groups form controls.
-- `name` identifies submitted fields.
-- `type` gives the browser input semantics.
-- `label` improves accessibility.
-- a submit button submits the form.
-
-React builds on these browser fundamentals rather than replacing them.
-
----
-
-# 3. Controlled Forms ⭐⭐⭐⭐⭐
-
-A controlled input stores its current value in React state.
+A controlled input stores its value in React state.
 
 ```jsx
-import { useState } from "react";
-
 function LoginForm() {
   const [email, setEmail] =
     useState("");
 
   return (
-    <form>
-      <label>
-        Email
-        <input
-          type="email"
-          value={email}
-          onChange={(event) =>
-            setEmail(
-              event.target.value
-            )
-          }
-        />
-      </label>
-    </form>
+    <input
+      value={email}
+      onChange={(e) =>
+        setEmail(e.target.value)
+      }
+    />
   );
 }
 ```
@@ -95,233 +36,128 @@ function LoginForm() {
 Flow:
 
 ```text
-React state
-    ↓
+state
+↓
 value prop
-    ↓
+↓
 input
-    ↓
+↓
 onChange
-    ↓
+↓
 setState
-    ↓
-render
-    ↓
-new value prop
 ```
 
-React state is the source of truth.
+Use controlled inputs when React needs the latest value immediately.
+
+Examples:
+
+- live validation
+- search filtering
+- conditional fields
+- character counters
 
 ---
 
-# 4. Multiple Controlled Fields
+## 2. Multiple Fields
 
 ```jsx
-function SignupForm() {
-  const [form, setForm] =
-    useState({
-      name: "",
-      email: "",
-      password: "",
-    });
+const [form, setForm] =
+  useState({
+    name: "",
+    email: "",
+  });
 
-  function handleChange(event) {
-    const {
-      name,
-      value,
-    } = event.target;
+function handleChange(event) {
+  const { name, value } =
+    event.target;
 
-    setForm((form) => ({
-      ...form,
-      [name]: value,
-    }));
-  }
-
-  return (
-    <form>
-      <input
-        name="name"
-        value={form.name}
-        onChange={handleChange}
-      />
-
-      <input
-        name="email"
-        type="email"
-        value={form.email}
-        onChange={handleChange}
-      />
-
-      <input
-        name="password"
-        type="password"
-        value={form.password}
-        onChange={handleChange}
-      />
-    </form>
-  );
+  setForm((current) => ({
+    ...current,
+    [name]: value,
+  }));
 }
 ```
 
-Dynamic property:
+Usage:
 
-```js
-[name]: value
+```jsx
+<input
+  name="name"
+  value={form.name}
+  onChange={handleChange}
+/>
+
+<input
+  name="email"
+  value={form.email}
+  onChange={handleChange}
+/>
 ```
 
-lets one handler update several fields.
+`[name]: value` lets one handler update different fields.
 
 ---
 
-# 5. Different Input Types
+## 3. Checkbox
 
-## Text
-
-```jsx
-<input
-  value={name}
-  onChange={(event) =>
-    setName(event.target.value)
-  }
-/>
-```
-
-## Textarea
+Checkboxes use `checked`, not the normal text-input `value`.
 
 ```jsx
-<textarea
-  value={bio}
-  onChange={(event) =>
-    setBio(event.target.value)
-  }
-/>
-```
+const [accepted, setAccepted] =
+  useState(false);
 
-## Select
-
-```jsx
-<select
-  value={role}
-  onChange={(event) =>
-    setRole(event.target.value)
-  }
->
-  <option value="frontend">
-    Frontend
-  </option>
-
-  <option value="backend">
-    Backend
-  </option>
-</select>
-```
-
-## Checkbox
-
-Checkboxes normally use:
-
-```text
-checked
-```
-
-not `value`.
-
-```jsx
 <input
   type="checkbox"
   checked={accepted}
-  onChange={(event) =>
+  onChange={(e) =>
     setAccepted(
-      event.target.checked
+      e.target.checked
     )
   }
 />
 ```
 
----
+Remember:
 
-# 6. Form Submission ⭐⭐⭐⭐⭐
-
-Traditional React pattern:
-
-```jsx
-function LoginForm() {
-  const [email, setEmail] =
-    useState("");
-
-  function handleSubmit(event) {
-    event.preventDefault();
-
-    console.log(email);
-  }
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-    >
-      <input
-        value={email}
-        onChange={(event) =>
-          setEmail(
-            event.target.value
-          )
-        }
-      />
-
-      <button type="submit">
-        Login
-      </button>
-    </form>
-  );
-}
+```text
+text input → value
+checkbox   → checked
 ```
 
-`preventDefault()` prevents the browser's normal page navigation/reload submission behavior when JavaScript is handling submission.
-
 ---
 
-# 7. Use onSubmit, Not Only Button onClick ⭐⭐⭐⭐⭐
+## 4. Form Submission
 
-Avoid:
+Use the form's `onSubmit`.
 
 ```jsx
-<form>
-  <input />
+function handleSubmit(event) {
+  event.preventDefault();
 
-  <button
-    onClick={handleSubmit}
-  >
-    Submit
+  console.log(form);
+}
+
+<form onSubmit={handleSubmit}>
+  ...
+  <button type="submit">
+    Save
   </button>
 </form>
 ```
 
-Prefer:
+Why `onSubmit` instead of only button `onClick`?
 
-```jsx
-<form
-  onSubmit={handleSubmit}
->
-  ...
-</form>
-```
+Because forms can also submit through:
 
-Why?
-
-Forms can be submitted through:
-
-- button click
 - Enter key
 - accessibility tools
-- browser form behavior
-
-Handling the form's submit event respects these semantics.
+- native browser behavior
 
 ---
 
-# 8. Button Types Matter
+## 5. Button Types Matter
 
-Inside a form:
+Submit button:
 
 ```jsx
 <button type="submit">
@@ -329,9 +165,7 @@ Inside a form:
 </button>
 ```
 
-submits it.
-
-A non-submit action should explicitly use:
+Normal button inside a form:
 
 ```jsx
 <button
@@ -342,19 +176,17 @@ A non-submit action should explicitly use:
 </button>
 ```
 
-Otherwise a button may accidentally submit the form.
+Without `type="button"`, a button inside a form may submit it.
 
 ---
 
-# 9. Uncontrolled Forms ⭐⭐⭐⭐⭐
+## 6. Uncontrolled Form + FormData
 
-Not every field must be stored in React state.
+Not every input needs React state.
 
 ```jsx
 function LoginForm() {
-  function handleSubmit(
-    event
-  ) {
+  function handleSubmit(event) {
     event.preventDefault();
 
     const formData =
@@ -368,9 +200,7 @@ function LoginForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-    >
+    <form onSubmit={handleSubmit}>
       <input
         name="email"
         type="email"
@@ -384,158 +214,34 @@ function LoginForm() {
 }
 ```
 
-The browser owns the current input value.
-
-At submission:
-
-```text
-form
- ↓
-FormData
- ↓
-submitted values
-```
-
----
-
-# 10. FormData ⭐⭐⭐⭐⭐
-
-`FormData` is a browser API for reading form values.
-
-```jsx
-const formData =
-  new FormData(
-    event.currentTarget
-  );
-
-const email =
-  formData.get("email");
-
-const password =
-  formData.get("password");
-```
-
 Important:
 
-> A field generally needs a `name` to participate in FormData submission.
+> Form fields need a `name` to be read correctly through FormData.
 
 ---
 
-# 11. Convert FormData to an Object
+## 7. Controlled vs Uncontrolled
 
-For simple fields:
+Use controlled fields when React needs the current value during typing.
 
-```jsx
-const values =
-  Object.fromEntries(
-    formData.entries()
-  );
-
-console.log(values);
-```
-
-But remember that repeated field names can contain multiple values, so `getAll()` may be required.
-
-Example:
-
-```js
-formData.getAll("skills");
-```
-
----
-
-# 12. Controlled vs Uncontrolled Form
-
-Controlled:
+Use uncontrolled fields when you mainly need values at submit time.
 
 ```text
-input
- ↓
-onChange
- ↓
-React state
- ↓
-value prop
- ↓
-input
+Controlled
+→ React state owns value
+
+Uncontrolled
+→ browser owns value
+→ read with FormData/ref
 ```
 
-Uncontrolled:
-
-```text
-browser DOM owns value
-        ↓
-submit
-        ↓
-FormData / ref
-```
-
-Use controlled fields when you need live React behavior such as:
-
-- instant validation
-- character count
-- dependent fields
-- live filtering
-- conditional UI
-
-Use uncontrolled/native form values when React does not need every keystroke.
+Neither is always better.
 
 ---
 
-# 13. Do Not Control Everything Automatically
+## 8. Native Validation
 
-This is valid:
-
-```jsx
-<input
-  name="email"
-  type="email"
-/>
-```
-
-You do not always need:
-
-```jsx
-const [email, setEmail] =
-  useState("");
-```
-
-Ask:
-
-> Does React need the value before submission?
-
-If no, browser-managed form state may be simpler.
-
----
-
-# 14. File Inputs
-
-File inputs are special.
-
-```jsx
-<input
-  name="resume"
-  type="file"
-/>
-```
-
-The browser controls selected files.
-
-Read them through:
-
-```js
-formData.get("resume")
-```
-
-or through the DOM/File API.
-
-Do not try to control a file input like a normal text field.
-
----
-
-# 15. Native Validation
-
-Browsers already support useful validation attributes.
+Use browser validation when it fits.
 
 ```jsx
 <input
@@ -552,74 +258,58 @@ Browsers already support useful validation attributes.
 />
 ```
 
-Useful native attributes include:
+Useful attributes:
 
-```text
-required
-minLength
-maxLength
-min
-max
-pattern
-type="email"
-type="url"
-```
-
-Use browser semantics when appropriate instead of rebuilding everything manually.
+- `required`
+- `minLength`
+- `maxLength`
+- `min`
+- `max`
+- `pattern`
+- `type="email"`
 
 ---
 
-# 16. Resetting a Form
+## 9. File Inputs
 
-Native form reset:
-
-```jsx
-<form>
-  ...
-  <button type="reset">
-    Reset
-  </button>
-</form>
-```
-
-For controlled state, reset React state:
+File inputs are browser-controlled.
 
 ```jsx
-setForm({
-  name: "",
-  email: "",
-});
+<input
+  name="resume"
+  type="file"
+/>
 ```
 
-For uncontrolled forms:
+Read with:
 
 ```js
-event.currentTarget.reset();
+formData.get("resume")
 ```
 
-may be appropriate after successful processing.
+Do not treat a file input like a normal controlled text field.
 
 ---
 
-# 17. Submission State
+## 10. Pending and Error State
 
-A production form often has states such as:
+A real async form usually needs:
 
 ```text
 idle
- ↓
+↓
 submitting
- ↓
+↓
 success
 
 or
 
 submitting
- ↓
+↓
 error
 ```
 
-Traditional approach:
+Traditional pattern:
 
 ```jsx
 const [pending, setPending] =
@@ -629,307 +319,76 @@ const [error, setError] =
   useState(null);
 ```
 
-Then submission manually updates them.
-
-React 19 provides better form-oriented primitives, which you will learn in Lessons 28 and 29.
+React 19 form APIs simplify this further in Lessons 28 and 29.
 
 ---
 
-# 18. Async Submission Pattern
+## Common Mistakes
 
-```jsx
-async function handleSubmit(
-  event
-) {
-  event.preventDefault();
+### Mistake 1 — Handling submit only on the button
 
-  setPending(true);
-  setError(null);
+Use `onSubmit` on the form.
 
-  try {
-    await saveProfile(form);
-  } catch (error) {
-    setError(
-      "Unable to save profile"
-    );
-  } finally {
-    setPending(false);
-  }
-}
-```
+### Mistake 2 — Forgetting `preventDefault()`
 
-This is useful to understand because it shows what higher-level React form primitives help simplify.
+Needed in traditional JavaScript-controlled form submission.
+
+### Mistake 3 — Forgetting `name`
+
+FormData depends on field names.
+
+### Mistake 4 — Using `value` for checkbox state
+
+Use `checked`.
+
+### Mistake 5 — Controlling every field without a reason
+
+Use the simplest model that fits the UI.
 
 ---
 
-# 19. Prevent Duplicate Submission
+## Interview Questions
 
-During submission:
+### What is a controlled input?
 
-```jsx
-<button
-  type="submit"
-  disabled={pending}
->
-  {pending
-    ? "Saving..."
-    : "Save"}
-</button>
-```
+An input whose current value is managed by React state.
 
-This improves UX and reduces accidental repeated submissions.
+### What is an uncontrolled input?
 
-But the server/API must still be designed safely; disabling a button is not a security or consistency guarantee.
+An input whose current value is managed by the DOM/browser.
 
----
+### Why use onSubmit?
 
-# 20. Error Messages and Accessibility
+It respects normal form behavior, including Enter-key submission.
 
-Associate errors clearly with fields.
+### What is FormData?
 
-```jsx
-<label htmlFor="email">
-  Email
-</label>
+A browser API used to read submitted form values.
 
-<input
-  id="email"
-  name="email"
-  aria-describedby={
-    error
-      ? "email-error"
-      : undefined
-  }
-/>
+### Why is name important?
 
-{error && (
-  <p id="email-error">
-    {error}
-  </p>
-)}
-```
-
-Good forms need both functionality and accessibility.
+It identifies form fields during submission.
 
 ---
 
-# 21. Derived Form State
-
-Avoid storing values that can be calculated.
-
-Bad:
-
-```jsx
-const [password, setPassword] =
-  useState("");
-
-const [isValid, setIsValid] =
-  useState(false);
-```
-
-if validity is simply:
-
-```jsx
-const isValid =
-  password.length >= 8;
-```
-
-Derived values should normally be calculated during render.
-
-This follows Lesson 22: you often do not need an Effect to synchronize derived state.
-
----
-
-# 22. Form State Shape
-
-For related fields:
-
-```jsx
-const [form, setForm] =
-  useState({
-    title: "",
-    company: "",
-    status: "applied",
-  });
-```
-
-can be convenient.
-
-But do not create one huge object merely because all values happen to be in one form.
-
-Choose state structure based on update and ownership needs.
-
----
-
-# 23. CareerLoop Example
-
-```jsx
-function ApplicationForm() {
-  const [form, setForm] =
-    useState({
-      company: "",
-      role: "",
-      status: "applied",
-    });
-
-  function handleChange(event) {
-    const {
-      name,
-      value,
-    } = event.target;
-
-    setForm((form) => ({
-      ...form,
-      [name]: value,
-    }));
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault();
-
-    console.log(form);
-  }
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-    >
-      <input
-        name="company"
-        value={form.company}
-        onChange={handleChange}
-        required
-      />
-
-      <input
-        name="role"
-        value={form.role}
-        onChange={handleChange}
-        required
-      />
-
-      <select
-        name="status"
-        value={form.status}
-        onChange={handleChange}
-      >
-        <option value="applied">
-          Applied
-        </option>
-
-        <option value="interview">
-          Interview
-        </option>
-
-        <option value="offer">
-          Offer
-        </option>
-      </select>
-
-      <button type="submit">
-        Save application
-      </button>
-    </form>
-  );
-}
-```
-
----
-
-# 24. Common Mistakes ⭐⭐⭐⭐⭐
-
-- handling submission only through button `onClick`
-- forgetting `event.preventDefault()` in traditional JS-controlled submission
-- forgetting `name` when using FormData
-- using `value` for checkbox state instead of `checked`
-- accidentally switching controlled fields between `undefined` and strings
-- controlling every input without a reason
-- storing derived validation state
-- using Effects to synchronize fields unnecessarily
-- forgetting `type="button"` for non-submit buttons
-- allowing duplicate submission without considering pending state
-- manually manipulating input DOM when state/props should control it
-- ignoring native HTML semantics and accessibility
-
----
-
-# 25. Interview Questions ⭐⭐⭐⭐⭐
-
-## What is a controlled input?
-
-An input whose current value is controlled by React state through a value/checked prop and an update handler.
-
-## What is an uncontrolled input?
-
-An input whose current value is primarily managed by the DOM/browser and is read when needed through FormData or a ref.
-
-## Controlled vs uncontrolled?
-
-Controlled fields are useful when React needs live access to the value. Uncontrolled fields can be simpler when values are mainly needed at submission.
-
-## Why use onSubmit instead of only button onClick?
-
-Because form submission includes keyboard and native browser/accessibility behavior, not only button clicks.
-
-## What does preventDefault do?
-
-It prevents the browser's default form submission/navigation behavior when JavaScript is handling submission.
-
-## What is FormData?
-
-A browser API representing form fields and values, commonly used to read or send form submissions.
-
-## Why is name important?
-
-Named successful form controls participate in form submission and can be retrieved through FormData.
-
-## Should validation always be stored in state?
-
-No. If validation can be derived from current values, calculate it rather than duplicating state.
-
----
-
-# 26. Mental Model
+## Quick Revision
 
 ```text
-FORM
- │
- ├── controlled fields
- │      ↓
- │   React state
- │
- ├── uncontrolled fields
- │      ↓
- │   browser DOM
- │
- ├── validation
- │      ↓
- │   native + application rules
- │
- └── submit
-        ↓
-     process data
-        ↓
- pending / error / success
+Need live value in React?
+→ controlled
+
+Need value mainly on submit?
+→ uncontrolled + FormData
+
+Submit logic?
+→ form onSubmit
+
+Checkbox?
+→ checked
+
+File input?
+→ browser controlled
 ```
-
----
-
-# 27. Key Takeaways
-
-- React forms build on native HTML form behavior.
-- Use semantic `form`, `label`, input types, and submit buttons.
-- Controlled inputs use React state as the source of truth.
-- Uncontrolled inputs let the browser own current values.
-- Use `onSubmit` for traditional React submission handling.
-- FormData is especially useful for browser-managed fields.
-- Fields need meaningful `name` attributes for form submission.
-- Checkboxes normally use `checked`.
-- File inputs are browser-controlled.
-- Native validation can solve many basic validation requirements.
-- Do not store derived form state unnecessarily.
-- Pending/error/success are important production form states.
-- React 19 provides Actions and form-specific Hooks that improve async form workflows.
 
 ---
 
