@@ -74,9 +74,23 @@ function TaskList() {
   );
 }
 
+function AddTask() {
+  const dispatch = useTasksDispatch();
+
+  function handleAdd() {
+    dispatch({
+      type: "added",
+      task: { id: crypto.randomUUID(), title: "Learn React" }
+    });
+  }
+
+  return <button onClick={handleAdd}>Add task</button>;
+}
+
 function TaskApp() {
   return (
     <TasksProvider>
+      <AddTask />
       <TaskList />
     </TasksProvider>
   );
@@ -84,6 +98,71 @@ function TaskApp() {
 ```
 
 Any descendant can call `useTasks()` to read tasks and `useTasksDispatch()` to update them.
+
+## Explanation — Step by Step
+
+### 1. Why combine them?
+
+Imagine `TaskApp → Dashboard → TaskList → DeleteButton`. Without Context, the parent must pass `tasks` and `dispatch` through intermediate components (**prop drilling**).
+
+- **`useReducer`** manages tasks and decides how they change.
+- **Context** makes tasks and dispatch accessible to deeply nested descendants.
+- **`dispatch`** sends a request such as `{ type: "deleted", id: 2 }`.
+
+### 2. Why create two contexts?
+
+```jsx
+const TasksContext = createContext(null);         // Current tasks
+const TasksDispatchContext = createContext(null); // Update function
+```
+
+`TasksContext` is for components that **read** tasks. `TasksDispatchContext` is for components that **send actions**. Separating them means a dispatch-only consumer does not subscribe to task state changes.
+
+### 3. What does TasksProvider do?
+
+```jsx
+const [tasks, dispatch] = useReducer(tasksReducer, []);
+```
+
+The provider **owns** the state. It supplies `tasks` through `TasksContext` and `dispatch` through `TasksDispatchContext`. Its `children` are the components wrapped by `<TasksProvider>...</TasksProvider>`.
+
+React 19 lets you write `<TasksContext value={tasks}>` instead of the older `<TasksContext.Provider value={tasks}>`.
+
+### 4. Why use custom hooks?
+
+`useTasks()` is a short, reusable way to call `useContext(TasksContext)`. `useTasksDispatch()` does the same for dispatch. Both throw a helpful error if used without the provider.
+
+### 5. What happens when Delete is clicked?
+
+```text
+Click Delete
+  ↓
+dispatch({ type: "deleted", id: task.id })
+  ↓
+tasksReducer(currentTasks, action)
+  ↓
+Returns a new array without that task
+  ↓
+TasksProvider receives updated tasks
+  ↓
+TaskList reads the new context value and re-renders
+```
+
+For **Add**, the `AddTask` component dispatches `{ type: "added", task: ... }`, and the reducer returns `[...tasks, action.task]`.
+
+The original example started with `[]` and only had a Delete button, so nothing appeared initially. The example above now includes **AddTask**, making the add/delete flow usable.
+
+## Benefits and When to Use It
+
+1. **Avoid prop drilling:** Descendants read state and dispatch directly.
+2. **Centralize updates:** The reducer contains add/delete logic in one place.
+3. **Cleaner components:** UI components dispatch meaningful actions instead of repeating array updates.
+4. **Reusable access:** Custom hooks provide a simple API.
+5. **Separate readers and updaters:** Dispatch-only components need not subscribe to changes in `TasksContext`.
+
+**Do not overuse it.** For a single small component, `useState` or a local `useReducer` is usually simpler. This architecture is helpful when complex state is shared across multiple deeply nested components.
+
+---
 
 ## Design Rules
 
