@@ -75,6 +75,63 @@ Also put Hook calls **before** any conditional `return`, and render components w
 
 React's special `use(resource)` API **can** be called inside conditions and loops, unlike ordinary Hooks. It still must be used in a component/Hook and **cannot** be called inside `try/catch`. This exception does not apply to `useState`, `useEffect`, `useContext`, or custom Hooks.
 
+## Understanding the React 19 use() Exception
+
+The `use()` API reads a **Promise** or a **Context** during rendering. Unlike ordinary Hooks, it can run inside an `if` or a loop.
+
+### Example 1 — Reading a Promise with Suspense
+
+```jsx
+import { Suspense, use } from "react";
+
+function UserProfile({ userPromise }) {
+  const user = use(userPromise);
+  return <h2>Welcome, {user.name}</h2>;
+}
+
+function App({ userPromise }) {
+  return (
+    <Suspense fallback={<p>Loading user...</p>}>
+      <UserProfile userPromise={userPromise} />
+    </Suspense>
+  );
+}
+```
+
+**How it works:** if `userPromise` is pending, the nearest `Suspense` boundary shows its fallback. Once resolved, React renders the user. If it rejects, an **Error Boundary** can handle the error.
+
+**Important:** `use()` reads an existing Promise; it does not fetch data itself. Pass a stable/cached Promise from a suitable source instead of creating a new Promise on every Client Component render.
+
+### Example 2 — Conditional Context Reading
+
+```jsx
+import { createContext, use } from "react";
+
+const ThemeContext = createContext("light");
+
+function Heading({ showTheme }) {
+  if (showTheme) {
+    const theme = use(ThemeContext); // ✅ Allowed
+    return <h1>Current theme: {theme}</h1>;
+  }
+
+  return <h1>Welcome!</h1>;
+}
+```
+
+Ordinary Hooks such as `useState`, `useEffect`, and `useContext` **cannot** be called conditionally. The special `use()` API **can**.
+
+### Key Restrictions
+
+- `use()` can read Promises and Context values.
+- It may be called in conditions and loops, **but only while rendering a component or custom Hook**.
+- Do not call `use()` inside `try/catch` or event handlers.
+- `use()` does not replace `useState` or `useEffect`.
+
+**Interview point:** `use()` is a React 19 exception to the top-level Hook rule; reading a pending Promise integrates with Suspense.
+
+---
+
 ## ESLint and Debugging
 
 Keep `eslint-plugin-react-hooks` enabled:
