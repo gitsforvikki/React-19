@@ -1,5 +1,95 @@
 # Lesson 31 — useReducer ⭐⭐⭐⭐⭐
 
+## Why Not Just useState? — CareerLoop Example
+
+Suppose CareerLoop lets you **add**, **delete**, and **change the status** of job applications.
+
+### With useState
+
+```jsx
+const [applications, setApplications] = useState([]);
+
+function addApplication(newApp) {
+  setApplications(prev => [...prev, newApp]);
+}
+
+function deleteApplication(id) {
+  setApplications(prev => prev.filter(app => app.id !== id));
+}
+
+function updateStatus(id, status) {
+  setApplications(prev =>
+    prev.map(app => app.id === id ? { ...app, status } : app)
+  );
+}
+```
+
+This is **correct**. But when many handlers contain complicated updates, the logic becomes harder to maintain.
+
+### With useReducer
+
+Move the update rules into one function:
+
+```jsx
+import { useReducer } from "react";
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "add":
+      return [...state, action.payload];
+    case "delete":
+      return state.filter(app => app.id !== action.payload);
+    case "update_status":
+      return state.map(app =>
+        app.id === action.payload.id
+          ? { ...app, status: action.payload.status }
+          : app
+      );
+    default:
+      throw new Error("Unknown action: " + action.type);
+  }
+}
+
+function Applications() {
+  const [applications, dispatch] = useReducer(reducer, []);
+
+  function addApplication(newApp) {
+    dispatch({ type: "add", payload: newApp });
+  }
+
+  function deleteApplication(id) {
+    dispatch({ type: "delete", payload: id });
+  }
+
+  function updateStatus(id, status) {
+    dispatch({ type: "update_status", payload: { id, status } });
+  }
+
+  return (
+    <button onClick={() =>
+      addApplication({ id: crypto.randomUUID(), company: "Google", status: "applied" })
+    }>
+      Add application ({applications.length})
+    </button>
+  );
+}
+```
+
+Now handlers say **what happened**, while the reducer decides **how state changes**.
+
+```text
+Click button → dispatch(action) → reducer(state, action) → new state → UI
+```
+
+- `applications`: current state
+- `dispatch`: sends an action
+- `reducer`: calculates the next state
+- `[]`: initial state
+
+**Remember:** For a simple counter, toggle, or input, `useState` is usually easier. Choose `useReducer` when *update logic* becomes complex—not just because you have several state variables.
+
+---
+
 ## Why useReducer?
 
 Use `useState` for simple updates. Choose **`useReducer`** when related state has multiple actions or complex transition rules.
