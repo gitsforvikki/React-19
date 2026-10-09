@@ -591,36 +591,131 @@ Choose clarity and compatibility appropriately.
 
 ## 21. Document Metadata
 
-React 19 can recognize metadata rendered from components:
+React 19 lets you write supported SEO metadata **inside a component**. React places `<title>`, `<meta>`, and supported `<link>` tags in the document's `<head>`.
+
+### Why does this matter?
+
+Imagine CodeBuddy has public developer profiles. Each profile should have its own title and description so search engines can understand the page.
 
 ```jsx
-function Profile({
-  user,
-}) {
+function DeveloperProfile({ developer }) {
   return (
     <>
-      <title>
-        {user.name} | CodeBuddy
-      </title>
-
+      <title>{developer.name} | CodeBuddy</title>
       <meta
         name="description"
-        content={
-          user.bio
-        }
+        content={`Connect with ${developer.name}, a developer skilled in ${developer.skills.join(", ")}.`}
       />
-
       <main>
-        ...
+        <h1>{developer.name}</h1>
+        <p>{developer.bio}</p>
       </main>
     </>
   );
 }
 ```
 
-React can hoist supported metadata such as `title`, `meta`, and relevant `link` elements into the document head.
+Even though these tags are written in `DeveloperProfile`, React manages their placement in the document head.
 
-Lesson 62 covers this area.
+### Reusable SEO component (React 19 + Vite)
+
+```jsx
+function SEO({ title, description, path, image }) {
+  const url = `https://example.com${path}`;
+
+  return (
+    <>
+      <title>{title}</title>
+      <meta name="description" content={description} />
+      <link rel="canonical" href={url} />
+
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      <meta property="og:url" content={url} />
+      <meta property="og:image" content={image} />
+      <meta property="og:type" content="profile" />
+      <meta name="twitter:card" content="summary_large_image" />
+    </>
+  );
+}
+
+function DeveloperProfile({ developer }) {
+  return (
+    <>
+      <SEO
+        title={`${developer.name} | CodeBuddy`}
+        description={developer.bio}
+        path={`/developers/${developer.id}`}
+        image={developer.profileImage}
+      />
+      <main>
+        <h1>{developer.name}</h1>
+        <p>{developer.bio}</p>
+      </main>
+    </>
+  );
+}
+```
+
+Replace `example.com` with your public domain; use an absolute publicly accessible image URL.
+
+| Metadata | Purpose |
+|---|---|
+| `<title>` | Page title |
+| `meta description` | Search-result description candidate |
+| `link canonical` | Preferred page URL |
+| `og:title` / `og:image` | Social sharing preview |
+| `twitter:card` | X/Twitter card format |
+
+Search engines and social platforms may choose different preview text or images.
+
+### Important: metadata is not automatic SEO
+
+```text
+Client-rendered React (CSR):
+HTML shell → JavaScript runs → metadata appears
+Search crawlers may need to execute JavaScript.
+
+Server-rendered/prerendered React (SSR/SSG):
+HTML + metadata delivered together
+Crawlers can read them without executing JavaScript.
+```
+
+React 19 makes **metadata management easier**, but SEO also depends on crawlability, useful content, canonical URLs, and performance. SSR/SSG generally makes dynamic public content easier for crawlers to discover.
+
+### What about Next.js App Router?
+
+In Next.js, prefer its built-in Metadata API:
+
+```jsx
+// app/developers/[id]/page.jsx
+export async function generateMetadata({ params }) {
+  const { id } = await params;
+  const developer = await getDeveloper(id);
+
+  return {
+    title: `${developer.name} | CodeBuddy`,
+    description: developer.bio,
+    openGraph: {
+      title: developer.name,
+      description: developer.bio,
+      images: [developer.profileImage],
+    },
+  };
+}
+
+export default async function Page({ params }) {
+  const { id } = await params;
+  const developer = await getDeveloper(id);
+  return <h1>{developer.name}</h1>;
+}
+```
+
+`getDeveloper` is your own API/database helper.
+
+**Interview takeaway:** React 19 hoists supported metadata from components into the document head; it does not automatically provide server rendering or guarantee search rankings. Next.js App Router has its own Metadata API.
+
+Lesson 62 covers document and resource improvements in more depth.
 
 ---
 
