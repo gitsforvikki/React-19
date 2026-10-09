@@ -263,32 +263,94 @@ The button's `formAction` can override the form's Action.
 
 ## 11. useFormStatus
 
-`useFormStatus` comes from `react-dom`.
+`useFormStatus` comes from `react-dom`. It tells a **component inside a form** whether that form's Action is currently submitting.
 
-It lets a descendant component inspect the status of its parent form.
+### The problem
+
+When someone clicks Save, we want the button to display **Saving...** and become disabled until the request finishes. Without form status, we might manually manage `isLoading` state.
+
+### Practical example
 
 ```jsx
-import {
-  useFormStatus,
-} from "react-dom";
+import { useFormStatus } from "react-dom";
 
 function SubmitButton() {
-  const { pending } =
-    useFormStatus();
+  const { pending } = useFormStatus();
 
   return (
-    <button
-      disabled={pending}
-    >
-      {pending
-        ? "Saving..."
-        : "Save"}
+    <button type="submit" disabled={pending}>
+      {pending ? "Saving..." : "Save"}
     </button>
+  );
+}
+
+function ProfileForm() {
+  async function saveProfile(formData) {
+    await updateProfile(formData);
+  }
+
+  return (
+    <form action={saveProfile}>
+      <input name="name" placeholder="Your name" />
+      <SubmitButton />
+    </form>
   );
 }
 ```
 
-This is useful for reusable form design components.
+### What happens?
+
+```text
+Before clicking Save  → pending = false → "Save"
+While Action runs     → pending = true  → "Saving..." (disabled)
+After Action settles  → pending = false → "Save"
+```
+
+React tracks the submission automatically; no separate `useState` is needed for this button.
+
+### What does "descendant component" mean?
+
+```text
+ProfileForm
+└── <form action={saveProfile}>
+    ├── <input />
+    └── <SubmitButton />  ← calls useFormStatus()
+```
+
+`SubmitButton` is **inside** the form, so it can read that parent form's status.
+
+**Important:** Calling `useFormStatus()` in `ProfileForm` itself does **not** track the `<form>` that `ProfileForm` returns. The hook reads the closest *parent* form above the component calling it. Put it in a child component rendered inside the form.
+
+### Reusable button
+
+```jsx
+function SubmitButton({ label }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? "Please wait..." : label}
+    </button>
+  );
+}
+
+// Each button reads its own enclosing form:
+<form action={loginAction}>
+  <SubmitButton label="Login" />
+</form>
+
+<form action={signupAction}>
+  <SubmitButton label="Signup" />
+</form>
+```
+
+### Common mistakes and interview points
+
+- Import `useFormStatus` from **`react-dom`**, not `react`.
+- It tracks the nearest parent form's submission, not an arbitrary form elsewhere.
+- It works with React form Actions (`action` / `formAction`); it does not automatically track a traditional async `onSubmit` handler.
+- Besides `pending`, it provides `data`, `method`, and `action`.
+- **Interview answer:** `useFormStatus` lets a descendant of a form read its submission status, enabling reusable loading/disabled submit buttons without manually managing pending state.
 
 ---
 
