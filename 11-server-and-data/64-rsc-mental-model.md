@@ -1,5 +1,316 @@
 # Lesson 64 — React Server Components Mental Model ⭐⭐⭐⭐⭐
 
+# Part 0 — Start Here: RSC, SSR, Client Components and Hydration
+
+> **Learning order:** First distinguish five terms, then follow one example through three rendering situations. The later parts of this lesson explain the underlying architecture more deeply. These examples use **Next.js App Router** as an illustration; React RSC itself is not a routing or caching framework.
+
+## A. Five Terms You Must Not Mix Up ⭐⭐⭐⭐⭐
+
+| Term | What it means |
+| --- | --- |
+| **RSC** (React Server Components) | React architecture/protocol that runs Server Components outside the browser and transports their results |
+| **Server Component** | Its component function runs in the server-side RSC environment; its implementation is not hydrated in the browser |
+| **Client Component** | Belongs to the client module graph, supports state/events/browser APIs, and gets client JavaScript |
+| **SSR** (server-side rendering) | Generating initial **HTML** on the server; even Client Components can participate |
+| **Hydration** | React uses client JavaScript to attach interactive behavior to existing server-rendered HTML |
+
+**The critical distinction:** *Where a component's implementation runs* is different from *where its initial HTML is produced*. A Client Component may execute during server pre-rendering **and** again in the browser for hydration. RSC is not the same as SSR.
+
+## B. Why RSC Exists: Keep Server-Only Work off the Browser
+
+Imagine displaying Markdown from a database. If a Client Component imports and runs a Markdown parser, that parser may become part of the browser bundle. A Server Component can parse Markdown on the server and send the rendered **result**, without shipping the parser's code.
+
+\`\`\`text
+Client-side parsing             Server Component
+browser downloads parser        server runs parser
+browser executes parser         server creates React result
+browser renders result          browser displays server-produced UI
+\`\`\`
+
+RSC can reduce shipped JavaScript and put data access near the database. It does **not** guarantee faster performance in every application; data fetching, caching, latency, and bundle size still matter.
+
+## C. The Same Example: Profile + LikeButton
+
+\`\`\`tsx
+// app/profile/page.tsx — Server Component in Next.js App Router
+import LikeButton from "./LikeButton";
+import { getDeveloper } from "@/lib/developers";
+
+export default async function Profile() {
+  const developer = await getDeveloper("42");
+
+  return (
+    <article>
+      <h1>{developer.name}</h1>
+      <p>{developer.bio}</p>
+      <LikeButton developerId={developer.id} />
+    </article>
+  );
+}
+\`\`\`
+
+\`\`\`tsx
+// app/profile/LikeButton.tsx — Client Component
+"use client";
+
+import { useState } from "react";
+
+export default function LikeButton({ developerId }: { developerId: string }) {
+  const [liked, setLiked] = useState(false);
+
+  return (
+    <button
+      aria-pressed={liked}
+      onClick={() => setLiked((previous) => !previous)}
+    >
+      {liked ? "Liked ❤️" : "Like 🤍"}
+    </button>
+  );
+}
+\`\`\`
+
+The id is available for a future server mutation; this demo changes **local browser state only**.
+
+\`\`\`text
+Profile (Server Component)
+├── name and bio (server-produced content)
+└── LikeButton ("use client" boundary)
+    ├── useState
+    └── onClick
+\`\`\`
+
+**Important:** A Server Component may import/render a Client Component without becoming a Client Component itself. The "use client" boundary begins in **LikeButton.tsx**.
+
+## D. What the Three Pieces Actually Contain ⭐⭐⭐⭐⭐
+
+For a normal **initial full-page request**, a Next.js App Router application can involve:
+
+**1. HTML — what the browser displays immediately**
+
+\`\`\`html
+<article>
+  <h1>Vikash</h1>
+  <p>Full Stack Developer</p>
+  <button>Like 🤍</button>
+</article>
+\`\`\`
+
+**2. RSC Payload (React Flight) — React's transport representation**
+
+Conceptually, it describes the rendered server result and a reference to where the Client Component belongs:
+
+\`\`\`js
+// ILLUSTRATION ONLY — NOT actual Flight wire format
+{
+  type: "article",
+  children: [
+    { type: "h1", children: "Vikash" },
+    { type: "p", children: "Full Stack Developer" },
+    {
+      type: "ClientReference",
+      module: "LikeButton",
+      export: "default",
+      props: { developerId: "42" }
+    }
+  ]
+}
+\`\`\`
+
+The **reference** identifies a client module/export. The framework's build metadata associates it with browser JavaScript chunks. **The reference is not the source code of LikeButton.** The payload may also include serialized props and streaming/Suspense information. Actual React Flight is a specialized serialized stream, not the JSON object above.
+
+**3. Client JavaScript — how interaction works**
+
+The browser loads JavaScript containing the compiled Client Component logic (\`useState\`, \`onClick\`, and dependencies) plus the React/framework runtime as needed. The Server Component's database query implementation **does not** go into the client bundle.
+
+HTML, RSC data and browser JavaScript are **conceptually distinct**, not necessarily three separate network responses: initial HTML may be streamed with embedded RSC data, while JavaScript files are typically loaded as separate resources.
+
+**Why isn't HTML enough?** The markup displays a button, but by itself doesn't tell React which client module/state/props to use to hydrate that button or how to reconcile later server updates. HTML displays; the RSC Payload describes the React result and client boundaries; client JS implements behavior.
+
+## E. Exactly What Happens on Initial Load
+
+\`\`\`text
+BROWSER: GET /profile
+          │
+          ▼
+SERVER: execute Profile; read database
+          │
+          ▼
+SERVER: create RSC payload (server result + LikeButton reference/props)
+          │
+          ▼
+SERVER: pre-render initial HTML, including <button>Like 🤍</button>
+          │
+          ▼
+BROWSER: display initial HTML
+          │
+          ▼
+BROWSER: load Client Component JavaScript
+          │
+          ▼
+BROWSER: hydrate LikeButton (state + click handler)
+          │
+          ▼
+USER CLICKS: setLiked updates UI locally (no server call in this demo)
+\`\`\`
+
+Hydration normally **reuses existing HTML** rather than deleting and rebuilding the entire document. The browser does **not** re-run \`Profile()\` or its database query.
+
+On subsequent **client-side navigation**, Next.js can fetch a **new RSC Payload** and reconcile the existing React tree without retrieving a complete new HTML document. Thus initial load and client-side navigation are different flows.
+
+## F. Three Scenarios: Exactly What Is Sent? ⭐⭐⭐⭐⭐
+
+### Scenario 1 — Only a Server Component
+
+\`\`\`tsx
+// app/page.tsx — no "use client"
+export default function Page() {
+  return (
+    <main>
+      <h1>Vikash</h1>
+      <p>Full Stack Developer</p>
+    </main>
+  );
+}
+\`\`\`
+
+On a normal initial request, Next.js typically produces:
+
+- **HTML:** \`<main><h1>Vikash</h1><p>Full Stack Developer</p></main>\`
+- **RSC Payload:** the server-produced React result, **without** a reference to a Client Component for this page
+- **Server Component implementation in browser:** **No**
+- **Hydration of Page:** **No**
+
+The RSC Payload still matters for subsequent React/Next navigation and updates: it is **not only for Client Components**. Framework runtime JavaScript may still load; no *page-specific* Client Component code is needed here. A shared layout could independently contain Client Components.
+
+\`\`\`text
+Server executes Page → RSC result + initial HTML → browser displays HTML
+\`\`\`
+
+### Scenario 2 — Only a Client Component
+
+\`\`\`tsx
+// app/page.tsx
+"use client";
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount((n) => n + 1)}>Count: {count}</button>;
+}
+\`\`\`
+
+On a normal initial full-page request with Next.js pre-rendering enabled:
+
+- **HTML:** \`<button>Count: 0</button>\`, generated by server-side pre-rendering
+- **RSC Payload:** a **Client Component reference** (with serialized props); it does **not** contain \`useState\` implementation
+- **Client JavaScript:** bundled \`Counter\` code, React and relevant dependencies
+- **Browser:** displays HTML, loads JS, then **hydrates** Counter
+- **Later click:** \`setCount\` re-renders in the browser; it does not require another RSC request
+
+\`\`\`text
+server pre-renders Counter HTML
+       ↓
+HTML + RSC client reference + JS resource links/chunks
+       ↓
+browser displays HTML → loads JS → hydrates Counter → clicks work
+\`\`\`
+
+A Client Component is **not synonymous with browser-only rendering**. Some framework patterns deliberately disable server pre-rendering for particular components; then the server may send a fallback rather than their final HTML.
+
+### Scenario 3 — Server Profile + Client LikeButton
+
+The example from Section C:
+
+- **HTML:** initial developer details **and** initial button markup
+- **RSC Payload:** server-produced profile tree + client reference to LikeButton + \`developerId\` prop
+- **Client JavaScript:** LikeButton and its client-side dependencies (not \`getDeveloper\`)
+- **Hydration:** applies to LikeButton, **not** Profile's server implementation
+
+\`\`\`text
+Server Profile
+├── server-produced name and bio (no Profile hydration)
+└── client LikeButton (pre-rendered initially; hydrated in browser)
+\`\`\`
+
+| On a normal initial Next.js request | Server-only page | Client-only page | Mixed page |
+| --- | --- | --- | --- |
+| Initial HTML | Yes | Yes | Yes |
+| RSC Payload | Yes | Yes | Yes |
+| Client Component reference for these components | No | Yes | Yes |
+| Page-specific Client Component JS | No | Yes | Yes |
+| Hydration of these components | No | Yes | Client components only |
+| Server Component implementation shipped to browser | No | Not applicable | No |
+
+Assume no additional Client Components in layouts/providers. Even a server-only page may load framework/runtime JavaScript. **Server-rendered does not necessarily mean static:** Server Components may read dynamic/request-time data, or they may run at build time depending on the framework.
+
+## G. Why a Server Component Can Render a Client Component
+
+\`\`\`tsx
+// Server Component — allowed
+import LikeButton from "./LikeButton";
+export default function Profile() {
+  return <LikeButton developerId="42" />;
+}
+\`\`\`
+
+A server module can refer to a client boundary. However, a Client Component **cannot directly import a module that requires server-only capabilities** (such as a direct database query) and expect it to run as a Server Component:
+
+\`\`\`tsx
+// Client Component — invalid if ServerProfile uses server-only APIs
+"use client";
+import ServerProfile from "./ServerProfile";
+export default function Dashboard() {
+  return <ServerProfile />;
+}
+\`\`\`
+
+To nest server-rendered content visually **inside** a Client Component, compose it from a Server Component:
+
+\`\`\`tsx
+// app/page.tsx — Server Component
+import Dashboard from "./Dashboard"; // Client Component
+import ServerProfile from "./ServerProfile"; // Server Component
+
+export default function Page() {
+  return (
+    <Dashboard>
+      <ServerProfile />
+    </Dashboard>
+  );
+}
+\`\`\`
+
+\`\`\`tsx
+// Dashboard.tsx — Client Component
+"use client";
+import type { ReactNode } from "react";
+
+export default function Dashboard({ children }: { children: ReactNode }) {
+  return <section>{children}</section>;
+}
+\`\`\`
+
+**Import graph ≠ visual JSX nesting.** The Client Component can receive server-rendered React elements as \`children\` without directly importing the server implementation.
+
+Also, a plain component file with no \`"use client"\` directive is **not permanently server-only**: when imported by a client module, compatible code becomes part of the client graph. A component that uses server-only APIs cannot be imported there.
+
+## H. Interview Summary and Check
+
+1. **RSC** describes server-produced React UI and Client Component boundaries through the Flight transport.
+2. **SSR** produces initial HTML, potentially including Client Components.
+3. **Hydration** attaches React interaction to the pre-rendered Client Components.
+4. **Pure server page:** normally HTML + RSC result; no page-specific client component to hydrate.
+5. **Pure client page:** normally HTML + RSC client reference/props + browser JavaScript; browser hydrates.
+6. **Mixed page:** Server Components run on server; Client Components can pre-render there initially and hydrate in browser.
+7. **Client reference ≠ client source code**; it identifies the module so the appropriate JS can be loaded.
+8. **A server import of a client component does not turn the parent into a client component.**
+
+**Practice:** Explain why \`<button>Like</button>\` in HTML is visible before hydration but its React \`onClick\` does not work until browser JavaScript loads.
+
+**Further reading:** [React Server Components](https://react.dev/reference/rsc/server-components) · [Next.js Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components)
+
+---
+
 ## 1. Why RSC Feels Difficult
 
 React Server Components are confusing when we try to fit them into only the old model:
