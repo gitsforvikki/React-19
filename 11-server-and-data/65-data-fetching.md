@@ -238,6 +238,39 @@ If every response calls `setResults`, the UI may finally show results for **r**,
 
 That is a race condition.
 
+### Why does it happen? A real timeline
+
+Suppose a user searches **React** and then changes the input to **Next.js**:
+
+| Time | What happens | Displayed results |
+| --- | --- | --- |
+| 1:00 | Request A for `React` starts | — |
+| 1:01 | Request B for `Next.js` starts | — |
+| 1:02 | Request B finishes and calls `setUsers` | Next.js ✅ |
+| 1:04 | Request A finishes and calls `setUsers` | React ❌ (stale) |
+
+**Request B is the latest request, but Request A is the last one to finish.** Without protection, the last state update wins—not necessarily the user's latest search.
+
+The issue is easy to introduce with an Effect that fetches whenever `query` changes:
+
+```jsx
+useEffect(() => {
+  async function fetchUsers() {
+    const response = await fetch(
+      `/api/users?search=${encodeURIComponent(query)}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch users");
+
+    const data = await response.json();
+    setUsers(data); // ❌ Old requests can overwrite newer results
+  }
+
+  fetchUsers().catch(console.error);
+}, [query]);
+```
+
+React does **not** automatically know that the response is obsolete. You must guard outdated results (Part 4), cancel compatible requests (Part 5), or coordinate them with request identity (Part 7).
+
 ---
 
 ## 9. Race Condition Mental Model
@@ -330,6 +363,10 @@ Cleanup for A mutates A's closure.
 
 So when A eventually resolves, it knows that its result is obsolete.
 
+For the timeline in Part 3: changing the search from `React` to `Next.js` runs A's cleanup and sets **A's** `ignore = true`. B gets a *new* `ignore = false`. If A finishes at 1:04, its `if (!ignore)` fails; B's displayed results remain intact.
+
+**Important:** The ignore flag does not stop the network request. It prevents stale results from updating the UI.
+
 This connects directly to Lesson 23 on closures.
 
 ---
@@ -404,7 +441,7 @@ fetch rejects with
 abort-related error
 ```
 
-Cancellation avoids unnecessary network/work where supported.
+Cancellation avoids unnecessary network/work where supported. Aborting an HTTP request does **not** guarantee that a server which already received it will stop processing. Also, when additional asynchronous work follows a fetch, use a stale-result guard (see Part 6) before setting state.
 
 ---
 
