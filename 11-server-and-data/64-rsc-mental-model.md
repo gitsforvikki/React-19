@@ -1,10 +1,10 @@
 # Lesson 64 — React Server Components Mental Model ⭐⭐⭐⭐⭐
 
-# Part 0 — Start Here: RSC, SSR, Client Components and Hydration
+## Part 0 — Start Here: RSC, SSR, Client Components and Hydration
 
 > **Learning order:** First distinguish five terms, then follow one example through three rendering situations. The later parts of this lesson explain the underlying architecture more deeply. These examples use **Next.js App Router** as an illustration; React RSC itself is not a routing or caching framework.
 
-## A. Five Terms You Must Not Mix Up ⭐⭐⭐⭐⭐
+### A. Five Terms You Must Not Mix Up ⭐⭐⭐⭐⭐
 
 | Term | What it means |
 | --- | --- |
@@ -16,22 +16,22 @@
 
 **The critical distinction:** *Where a component's implementation runs* is different from *where its initial HTML is produced*. A Client Component may execute during server pre-rendering **and** again in the browser for hydration. RSC is not the same as SSR.
 
-## B. Why RSC Exists: Keep Server-Only Work off the Browser
+### B. Why RSC Exists: Keep Server-Only Work off the Browser
 
 Imagine displaying Markdown from a database. If a Client Component imports and runs a Markdown parser, that parser may become part of the browser bundle. A Server Component can parse Markdown on the server and send the rendered **result**, without shipping the parser's code.
 
-\`\`\`text
+```text
 Client-side parsing             Server Component
 browser downloads parser        server runs parser
 browser executes parser         server creates React result
 browser renders result          browser displays server-produced UI
-\`\`\`
+```
 
 RSC can reduce shipped JavaScript and put data access near the database. It does **not** guarantee faster performance in every application; data fetching, caching, latency, and bundle size still matter.
 
-## C. The Same Example: Profile + LikeButton
+### C. The Same Example: Profile + LikeButton
 
-\`\`\`tsx
+```tsx
 // app/profile/page.tsx — Server Component in Next.js App Router
 import LikeButton from "./LikeButton";
 import { getDeveloper } from "@/lib/developers";
@@ -47,9 +47,9 @@ export default async function Profile() {
     </article>
   );
 }
-\`\`\`
+```
 
-\`\`\`tsx
+```tsx
 // app/profile/LikeButton.tsx — Client Component
 "use client";
 
@@ -67,39 +67,39 @@ export default function LikeButton({ developerId }: { developerId: string }) {
     </button>
   );
 }
-\`\`\`
+```
 
 The id is available for a future server mutation; this demo changes **local browser state only**.
 
-\`\`\`text
+```text
 Profile (Server Component)
 ├── name and bio (server-produced content)
 └── LikeButton ("use client" boundary)
     ├── useState
     └── onClick
-\`\`\`
+```
 
 **Important:** A Server Component may import/render a Client Component without becoming a Client Component itself. The "use client" boundary begins in **LikeButton.tsx**.
 
-## D. What the Three Pieces Actually Contain ⭐⭐⭐⭐⭐
+### D. What the Three Pieces Actually Contain ⭐⭐⭐⭐⭐
 
 For a normal **initial full-page request**, a Next.js App Router application can involve:
 
 **1. HTML — what the browser displays immediately**
 
-\`\`\`html
+```html
 <article>
   <h1>Vikash</h1>
   <p>Full Stack Developer</p>
   <button>Like 🤍</button>
 </article>
-\`\`\`
+```
 
 **2. RSC Payload (React Flight) — React's transport representation**
 
 Conceptually, it describes the rendered server result and a reference to where the Client Component belongs:
 
-\`\`\`js
+```js
 // ILLUSTRATION ONLY — NOT actual Flight wire format
 {
   type: "article",
@@ -114,21 +114,21 @@ Conceptually, it describes the rendered server result and a reference to where t
     }
   ]
 }
-\`\`\`
+```
 
 The **reference** identifies a client module/export. The framework's build metadata associates it with browser JavaScript chunks. **The reference is not the source code of LikeButton.** The payload may also include serialized props and streaming/Suspense information. Actual React Flight is a specialized serialized stream, not the JSON object above.
 
 **3. Client JavaScript — how interaction works**
 
-The browser loads JavaScript containing the compiled Client Component logic (\`useState\`, \`onClick\`, and dependencies) plus the React/framework runtime as needed. The Server Component's database query implementation **does not** go into the client bundle.
+The browser loads JavaScript containing the compiled Client Component logic (`useState`, `onClick`, and dependencies) plus the React/framework runtime as needed. The Server Component's database query implementation **does not** go into the client bundle.
 
 HTML, RSC data and browser JavaScript are **conceptually distinct**, not necessarily three separate network responses: initial HTML may be streamed with embedded RSC data, while JavaScript files are typically loaded as separate resources.
 
 **Why isn't HTML enough?** The markup displays a button, but by itself doesn't tell React which client module/state/props to use to hydrate that button or how to reconcile later server updates. HTML displays; the RSC Payload describes the React result and client boundaries; client JS implements behavior.
 
-## E. Exactly What Happens on Initial Load
+### E. Exactly What Happens on Initial Load
 
-\`\`\`text
+```text
 BROWSER: GET /profile
           │
           ▼
@@ -151,17 +151,17 @@ BROWSER: hydrate LikeButton (state + click handler)
           │
           ▼
 USER CLICKS: setLiked updates UI locally (no server call in this demo)
-\`\`\`
+```
 
-Hydration normally **reuses existing HTML** rather than deleting and rebuilding the entire document. The browser does **not** re-run \`Profile()\` or its database query.
+Hydration normally **reuses existing HTML** rather than deleting and rebuilding the entire document. The browser does **not** re-run `Profile()` or its database query.
 
 On subsequent **client-side navigation**, Next.js can fetch a **new RSC Payload** and reconcile the existing React tree without retrieving a complete new HTML document. Thus initial load and client-side navigation are different flows.
 
-## F. Three Scenarios: Exactly What Is Sent? ⭐⭐⭐⭐⭐
+### F. Three Scenarios: Exactly What Is Sent? ⭐⭐⭐⭐⭐
 
-### Scenario 1 — Only a Server Component
+#### Scenario 1 — Only a Server Component
 
-\`\`\`tsx
+```tsx
 // app/page.tsx — no "use client"
 export default function Page() {
   return (
@@ -171,24 +171,24 @@ export default function Page() {
     </main>
   );
 }
-\`\`\`
+```
 
 On a normal initial request, Next.js typically produces:
 
-- **HTML:** \`<main><h1>Vikash</h1><p>Full Stack Developer</p></main>\`
+- **HTML:** `<main><h1>Vikash</h1><p>Full Stack Developer</p></main>`
 - **RSC Payload:** the server-produced React result, **without** a reference to a Client Component for this page
 - **Server Component implementation in browser:** **No**
 - **Hydration of Page:** **No**
 
 The RSC Payload still matters for subsequent React/Next navigation and updates: it is **not only for Client Components**. Framework runtime JavaScript may still load; no *page-specific* Client Component code is needed here. A shared layout could independently contain Client Components.
 
-\`\`\`text
+```text
 Server executes Page → RSC result + initial HTML → browser displays HTML
-\`\`\`
+```
 
-### Scenario 2 — Only a Client Component
+#### Scenario 2 — Only a Client Component
 
-\`\`\`tsx
+```tsx
 // app/page.tsx
 "use client";
 import { useState } from "react";
@@ -197,40 +197,40 @@ export default function Counter() {
   const [count, setCount] = useState(0);
   return <button onClick={() => setCount((n) => n + 1)}>Count: {count}</button>;
 }
-\`\`\`
+```
 
 On a normal initial full-page request with Next.js pre-rendering enabled:
 
-- **HTML:** \`<button>Count: 0</button>\`, generated by server-side pre-rendering
-- **RSC Payload:** a **Client Component reference** (with serialized props); it does **not** contain \`useState\` implementation
-- **Client JavaScript:** bundled \`Counter\` code, React and relevant dependencies
+- **HTML:** `<button>Count: 0</button>`, generated by server-side pre-rendering
+- **RSC Payload:** a **Client Component reference** (with serialized props); it does **not** contain `useState` implementation
+- **Client JavaScript:** bundled `Counter` code, React and relevant dependencies
 - **Browser:** displays HTML, loads JS, then **hydrates** Counter
-- **Later click:** \`setCount\` re-renders in the browser; it does not require another RSC request
+- **Later click:** `setCount` re-renders in the browser; it does not require another RSC request
 
-\`\`\`text
+```text
 server pre-renders Counter HTML
        ↓
 HTML + RSC client reference + JS resource links/chunks
        ↓
 browser displays HTML → loads JS → hydrates Counter → clicks work
-\`\`\`
+```
 
 A Client Component is **not synonymous with browser-only rendering**. Some framework patterns deliberately disable server pre-rendering for particular components; then the server may send a fallback rather than their final HTML.
 
-### Scenario 3 — Server Profile + Client LikeButton
+#### Scenario 3 — Server Profile + Client LikeButton
 
 The example from Section C:
 
 - **HTML:** initial developer details **and** initial button markup
-- **RSC Payload:** server-produced profile tree + client reference to LikeButton + \`developerId\` prop
-- **Client JavaScript:** LikeButton and its client-side dependencies (not \`getDeveloper\`)
+- **RSC Payload:** server-produced profile tree + client reference to LikeButton + `developerId` prop
+- **Client JavaScript:** LikeButton and its client-side dependencies (not `getDeveloper`)
 - **Hydration:** applies to LikeButton, **not** Profile's server implementation
 
-\`\`\`text
+```text
 Server Profile
 ├── server-produced name and bio (no Profile hydration)
 └── client LikeButton (pre-rendered initially; hydrated in browser)
-\`\`\`
+```
 
 | On a normal initial Next.js request | Server-only page | Client-only page | Mixed page |
 | --- | --- | --- | --- |
@@ -243,30 +243,30 @@ Server Profile
 
 Assume no additional Client Components in layouts/providers. Even a server-only page may load framework/runtime JavaScript. **Server-rendered does not necessarily mean static:** Server Components may read dynamic/request-time data, or they may run at build time depending on the framework.
 
-## G. Why a Server Component Can Render a Client Component
+### G. Why a Server Component Can Render a Client Component
 
-\`\`\`tsx
+```tsx
 // Server Component — allowed
 import LikeButton from "./LikeButton";
 export default function Profile() {
   return <LikeButton developerId="42" />;
 }
-\`\`\`
+```
 
 A server module can refer to a client boundary. However, a Client Component **cannot directly import a module that requires server-only capabilities** (such as a direct database query) and expect it to run as a Server Component:
 
-\`\`\`tsx
+```tsx
 // Client Component — invalid if ServerProfile uses server-only APIs
 "use client";
 import ServerProfile from "./ServerProfile";
 export default function Dashboard() {
   return <ServerProfile />;
 }
-\`\`\`
+```
 
 To nest server-rendered content visually **inside** a Client Component, compose it from a Server Component:
 
-\`\`\`tsx
+```tsx
 // app/page.tsx — Server Component
 import Dashboard from "./Dashboard"; // Client Component
 import ServerProfile from "./ServerProfile"; // Server Component
@@ -278,9 +278,9 @@ export default function Page() {
     </Dashboard>
   );
 }
-\`\`\`
+```
 
-\`\`\`tsx
+```tsx
 // Dashboard.tsx — Client Component
 "use client";
 import type { ReactNode } from "react";
@@ -288,13 +288,13 @@ import type { ReactNode } from "react";
 export default function Dashboard({ children }: { children: ReactNode }) {
   return <section>{children}</section>;
 }
-\`\`\`
+```
 
-**Import graph ≠ visual JSX nesting.** The Client Component can receive server-rendered React elements as \`children\` without directly importing the server implementation.
+**Import graph ≠ visual JSX nesting.** The Client Component can receive server-rendered React elements as `children` without directly importing the server implementation.
 
-Also, a plain component file with no \`"use client"\` directive is **not permanently server-only**: when imported by a client module, compatible code becomes part of the client graph. A component that uses server-only APIs cannot be imported there.
+Also, a plain component file with no `"use client"` directive is **not permanently server-only**: when imported by a client module, compatible code becomes part of the client graph. A component that uses server-only APIs cannot be imported there.
 
-## H. Interview Summary and Check
+### H. Interview Summary and Check
 
 1. **RSC** describes server-produced React UI and Client Component boundaries through the Flight transport.
 2. **SSR** produces initial HTML, potentially including Client Components.
@@ -305,13 +305,13 @@ Also, a plain component file with no \`"use client"\` directive is **not permane
 7. **Client reference ≠ client source code**; it identifies the module so the appropriate JS can be loaded.
 8. **A server import of a client component does not turn the parent into a client component.**
 
-**Practice:** Explain why \`<button>Like</button>\` in HTML is visible before hydration but its React \`onClick\` does not work until browser JavaScript loads.
+**Practice:** Explain why `<button>Like</button>` in HTML is visible before hydration but its React `onClick` does not work until browser JavaScript loads.
 
 **Further reading:** [React Server Components](https://react.dev/reference/rsc/server-components) · [Next.js Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components)
 
 ---
 
-## 1. Why RSC Feels Difficult
+### 1. Why RSC Feels Difficult
 
 React Server Components are confusing when we try to fit them into only the old model:
 
@@ -342,9 +342,9 @@ It does **not** teach Next.js routing, caching, revalidation, or framework-speci
 
 ---
 
-# Part 1 — The Fundamental Idea
+## Part 1 — The Fundamental Idea
 
-## 2. Server Components Are Executed Before Client Bundling ⭐⭐⭐⭐⭐
+### 2. Server Components Are Executed Before Client Bundling ⭐⭐⭐⭐⭐
 
 Server Components execute in an environment separate from the client application.
 
@@ -374,7 +374,7 @@ The browser does not need the server-only Markdown parser merely to display the 
 
 ---
 
-## 3. Think "Component Output", Not Just HTML ⭐⭐⭐⭐⭐
+### 3. Think "Component Output", Not Just HTML ⭐⭐⭐⭐⭐
 
 A Server Component does not simply return an HTML string.
 
@@ -408,9 +408,9 @@ This is why RSC is more than traditional HTML templating.
 
 ---
 
-# Part 2 — RSC Payload / Representation
+## Part 2 — RSC Payload / Representation
 
-## 4. What Is the RSC Payload? ⭐⭐⭐⭐⭐
+### 4. What Is the RSC Payload? ⭐⭐⭐⭐⭐
 
 At a conceptual level, React serializes Server Component rendering into a transport representation understood by React.
 
@@ -436,7 +436,7 @@ The exact wire format is an implementation detail and should not be hard-coded i
 
 ---
 
-## 5. Why Client Component References Are Needed
+### 5. Why Client Component References Are Needed
 
 Suppose the server renders:
 
@@ -462,7 +462,7 @@ The client bundle contains the actual interactive implementation.
 
 ---
 
-## 6. The Browser Does Not Download Server Component Implementation ⭐⭐⭐⭐⭐
+### 6. The Browser Does Not Download Server Component Implementation ⭐⭐⭐⭐⭐
 
 Imagine:
 
@@ -488,9 +488,9 @@ This is a major RSC benefit.
 
 ---
 
-# Part 3 — RSC and HTML
+## Part 3 — RSC and HTML
 
-## 7. RSC Payload Is Not Initial HTML ⭐⭐⭐⭐⭐
+### 7. RSC Payload Is Not Initial HTML ⭐⭐⭐⭐⭐
 
 Keep these separate:
 
@@ -506,7 +506,7 @@ A framework can additionally use SSR to turn the initial combined React tree int
 
 ---
 
-## 8. Initial Request Mental Model
+### 8. Initial Request Mental Model
 
 A framework using both RSC and SSR may conceptually do:
 
@@ -536,7 +536,7 @@ The conceptual separation is what matters.
 
 ---
 
-## 9. Later RSC Updates
+### 9. Later RSC Updates
 
 After the initial page, an RSC-capable framework may request new Server Component output without replacing the whole document.
 
@@ -558,9 +558,9 @@ This allows server-centric rendering without reverting to full-page MPA navigati
 
 ---
 
-# Part 4 — State Preservation
+## Part 4 — State Preservation
 
-## 10. Why Client State Can Survive Server Updates ⭐⭐⭐⭐⭐
+### 10. Why Client State Can Survive Server Updates ⭐⭐⭐⭐⭐
 
 Suppose:
 
@@ -584,7 +584,7 @@ RSC does not replace React's identity rules.
 
 ---
 
-## 11. When Client State Can Reset
+### 11. When Client State Can Reset
 
 State can still reset if identity changes.
 
@@ -609,9 +609,9 @@ preserve or reset client state
 
 ---
 
-# Part 5 — Client Boundaries
+## Part 5 — Client Boundaries
 
-## 12. "use client" Is a Module Boundary ⭐⭐⭐⭐⭐
+### 12. "use client" Is a Module Boundary ⭐⭐⭐⭐⭐
 
 ```jsx
 "use client";
@@ -641,7 +641,7 @@ The boundary is about bundling/evaluation, not merely visual placement.
 
 ---
 
-## 13. One Directive Can Pull Many Modules Client-Side
+### 13. One Directive Can Pull Many Modules Client-Side
 
 ```text
 Dashboard.js
@@ -659,7 +659,7 @@ This is why architecture should place client boundaries deliberately.
 
 ---
 
-## 14. Composition Can Avoid Expanding the Client Bundle ⭐⭐⭐⭐⭐
+### 14. Composition Can Avoid Expanding the Client Bundle ⭐⭐⭐⭐⭐
 
 Suppose an interactive shell needs server-rendered content.
 
@@ -692,9 +692,9 @@ The client shell does not need the ServerContent implementation.
 
 ---
 
-# Part 6 — Serialization Boundary
+## Part 6 — Serialization Boundary
 
-## 15. Crossing Environments Requires Serialization ⭐⭐⭐⭐⭐
+### 15. Crossing Environments Requires Serialization ⭐⭐⭐⭐⭐
 
 Server and client do not share the same JavaScript memory.
 
@@ -712,7 +712,7 @@ This boundary is fundamental.
 
 ---
 
-## 16. Supported Values Are Broader Than JSON
+### 16. Supported Values Are Broader Than JSON
 
 Common supported values include:
 
@@ -734,7 +734,7 @@ Always check current React/framework support for edge cases.
 
 ---
 
-## 17. Why Ordinary Closures Cannot Cross
+### 17. Why Ordinary Closures Cannot Cross
 
 Server closure:
 
@@ -761,9 +761,9 @@ Server Function reference
 
 ---
 
-# Part 7 — Server Functions
+## Part 7 — Server Functions
 
-## 18. Server Function Mental Model ⭐⭐⭐⭐⭐
+### 18. Server Function Mental Model ⭐⭐⭐⭐⭐
 
 ```jsx
 async function updateApplication(
@@ -800,7 +800,7 @@ Client
 
 ---
 
-## 19. Server Function vs Server Action
+### 19. Server Function vs Server Action
 
 Current React terminology distinguishes them.
 
@@ -820,7 +820,7 @@ For precise modern terminology, use **Server Function** as the broader term.
 
 ---
 
-## 20. Server Functions Are Mainly for Mutations ⭐⭐⭐⭐⭐
+### 20. Server Functions Are Mainly for Mutations ⭐⭐⭐⭐⭐
 
 Use Server Functions for operations such as:
 
@@ -846,9 +846,9 @@ This separation is useful for architecture.
 
 ---
 
-# Part 8 — Async Rendering and Suspense
+## Part 8 — Async Rendering and Suspense
 
-## 21. Async Server Components ⭐⭐⭐⭐⭐
+### 21. Async Server Components ⭐⭐⭐⭐⭐
 
 ```jsx
 async function Application({
@@ -873,7 +873,7 @@ This allows async data access to participate directly in the component tree.
 
 ---
 
-## 22. Start Promise on Server, Read on Client ⭐⭐⭐⭐⭐
+### 22. Start Promise on Server, Read on Client ⭐⭐⭐⭐⭐
 
 React supports an important pattern:
 
@@ -948,7 +948,7 @@ This connects Lessons 53 and 59 with RSC.
 
 ---
 
-## 23. Avoid Accidental Waterfalls ⭐⭐⭐⭐⭐
+### 23. Avoid Accidental Waterfalls ⭐⭐⭐⭐⭐
 
 Bad sequence:
 
@@ -974,9 +974,9 @@ RSC makes server-side fetching convenient, but poor async structure can still cr
 
 ---
 
-# Part 9 — Server Components Without a Runtime Web Server
+## Part 9 — Server Components Without a Runtime Web Server
 
-## 24. "Server" Does Not Always Mean Per-Request Server ⭐⭐⭐⭐⭐
+### 24. "Server" Does Not Always Mean Per-Request Server ⭐⭐⭐⭐⭐
 
 A Server Component may execute at build time.
 
@@ -1000,9 +1000,9 @@ Therefore:
 
 ---
 
-# Part 10 — RSC and Hydration
+## Part 10 — RSC and Hydration
 
-## 25. What Gets Hydrated? ⭐⭐⭐⭐⭐
+### 25. What Gets Hydrated? ⭐⭐⭐⭐⭐
 
 Server Component implementation itself does not hydrate as an interactive browser component.
 
@@ -1025,7 +1025,7 @@ This distinction is critical.
 
 ---
 
-## 26. Hydration Is Not "Re-running All Server Components in Browser"
+### 26. Hydration Is Not "Re-running All Server Components in Browser"
 
 The browser does not download the server-only component implementation and rerun database/filesystem logic.
 
@@ -1039,31 +1039,31 @@ to reconstruct and activate the application.
 
 ---
 
-# Part 11 — Performance Mental Model
+## Part 11 — Performance Mental Model
 
-## 27. What RSC Can Improve
+### 27. What RSC Can Improve
 
 Potential benefits:
 
-### Less JavaScript
+#### Less JavaScript
 
 Server-only component/dependency code stays off the client.
 
-### Data locality
+#### Data locality
 
 Server Components can read data close to its source.
 
-### Fewer client fetch waterfalls
+#### Fewer client fetch waterfalls
 
 Some data can be fetched before the browser starts interactive rendering.
 
-### Streaming
+#### Streaming
 
 Suspense boundaries can progressively reveal UI.
 
 ---
 
-## 28. RSC Is Not Automatically Faster ⭐⭐⭐⭐⭐
+### 28. RSC Is Not Automatically Faster ⭐⭐⭐⭐⭐
 
 Performance can still be poor because of:
 
@@ -1080,7 +1080,7 @@ RSC provides architecture primitives, not automatic performance.
 
 ---
 
-## 29. Client Boundary Cost
+### 29. Client Boundary Cost
 
 Moving a component into the client graph may require shipping:
 
@@ -1103,9 +1103,9 @@ But do not split components so aggressively that architecture becomes unreadable
 
 ---
 
-# Part 12 — Security Mental Model
+## Part 12 — Security Mental Model
 
-## 30. Serialization Is a Trust Boundary ⭐⭐⭐⭐⭐
+### 30. Serialization Is a Trust Boundary ⭐⭐⭐⭐⭐
 
 Before passing server data to a Client Component, ask:
 
@@ -1126,7 +1126,7 @@ The client can inspect data it receives.
 
 ---
 
-## 31. Server Function Calls Are Requests
+### 31. Server Function Calls Are Requests
 
 Think of a Server Function call like an endpoint invocation:
 
@@ -1148,9 +1148,9 @@ Do not trust arguments merely because React serialized them.
 
 ---
 
-# Part 13 — CodeBuddy Architecture
+## Part 13 — CodeBuddy Architecture
 
-## 32. Example Mental Model
+### 32. Example Mental Model
 
 ```text
 SERVER
@@ -1174,9 +1174,9 @@ Only interaction logic becomes client JavaScript.
 
 ---
 
-# Part 14 — CareerLoop Architecture
+## Part 14 — CareerLoop Architecture
 
-## 33. Example Mental Model
+### 33. Example Mental Model
 
 ```text
 SERVER
@@ -1208,9 +1208,9 @@ Exact framework revalidation/caching behavior is intentionally outside this Reac
 
 ---
 
-# Part 15 — Common Misconceptions
+## Part 15 — Common Misconceptions
 
-## 34. Misconception: RSC Means SSR
+### 34. Misconception: RSC Means SSR
 
 Wrong.
 
@@ -1226,7 +1226,7 @@ They can cooperate.
 
 ---
 
-## 35. Misconception: Server Components Need "use server"
+### 35. Misconception: Server Components Need "use server"
 
 Wrong.
 
@@ -1234,7 +1234,7 @@ Wrong.
 
 ---
 
-## 36. Misconception: Client Component Means Browser-Only Initial Rendering
+### 36. Misconception: Client Component Means Browser-Only Initial Rendering
 
 Wrong.
 
@@ -1242,7 +1242,7 @@ A framework may include Client Components in server-generated initial HTML and h
 
 ---
 
-## 37. Misconception: Server Components Hydrate
+### 37. Misconception: Server Components Hydrate
 
 The Server Component implementation itself does not hydrate in the browser.
 
@@ -1250,7 +1250,7 @@ Client Components are the interactive/hydrated pieces.
 
 ---
 
-## 38. Misconception: RSC Payload Is HTML
+### 38. Misconception: RSC Payload Is HTML
 
 Wrong.
 
@@ -1260,7 +1260,7 @@ HTML is a separate representation.
 
 ---
 
-## 39. Misconception: Everything Must Be Serializable JSON
+### 39. Misconception: Everything Must Be Serializable JSON
 
 Too simplistic.
 
@@ -1268,7 +1268,7 @@ React's RSC serialization supports more types than JSON, including certain built
 
 ---
 
-## 40. Misconception: Server Functions Are Secure Automatically
+### 40. Misconception: Server Functions Are Secure Automatically
 
 Wrong.
 
@@ -1276,9 +1276,9 @@ They still receive untrusted requests/input and need authentication, authorizati
 
 ---
 
-# Part 16 — Debugging Mental Model
+## Part 16 — Debugging Mental Model
 
-## 41. When Something Fails, Ask Where It Runs ⭐⭐⭐⭐⭐
+### 41. When Something Fails, Ask Where It Runs ⭐⭐⭐⭐⭐
 
 Before debugging, classify the code:
 
@@ -1298,7 +1298,7 @@ Many RSC errors are boundary errors rather than ordinary React rendering bugs.
 
 ---
 
-## 42. Debugging Checklist
+### 42. Debugging Checklist
 
 Ask:
 
@@ -1314,21 +1314,21 @@ Ask:
 
 ---
 
-# Part 17 — Interview Questions
+## Part 17 — Interview Questions
 
-## 43. What Is the RSC Payload? ⭐⭐⭐⭐⭐
+### 43. What Is the RSC Payload? ⭐⭐⭐⭐⭐
 
 A React transport representation containing Server Component rendering output, serializable data, Client Component references, and information React needs to reconstruct/update the component tree. It is not simply HTML.
 
 ---
 
-## 44. Does the Browser Receive Server Component Source Code?
+### 44. Does the Browser Receive Server Component Source Code?
 
 Not as the Server Component implementation needed to execute that server logic. Server-only component code and dependencies can remain outside the client bundle.
 
 ---
 
-## 45. RSC vs SSR?
+### 45. RSC vs SSR?
 
 RSC defines a server/client component architecture and transport model.
 
@@ -1338,7 +1338,7 @@ A framework can combine them.
 
 ---
 
-## 46. What Hydrates?
+### 46. What Hydrates?
 
 Interactive Client Components.
 
@@ -1346,45 +1346,45 @@ Server Component implementation itself does not hydrate in the browser.
 
 ---
 
-## 47. Why Can Client State Survive an RSC Update?
+### 47. Why Can Client State Survive an RSC Update?
 
 React reconciles new server output with the existing tree. If a Client Component preserves its identity, its state can remain.
 
 ---
 
-## 48. Why Must Boundary Values Be Serializable?
+### 48. Why Must Boundary Values Be Serializable?
 
 Server and browser run in different JavaScript environments and do not share memory, so values must cross through React's transport protocol.
 
 ---
 
-## 49. What Is a Server Function?
+### 49. What Is a Server Function?
 
 An async function exposed through RSC infrastructure so client code can invoke server-side execution through a serialized reference/network call.
 
 ---
 
-## 50. Server Function vs Server Action?
+### 50. Server Function vs Server Action?
 
 Server Function is the broader concept. A Server Function used in an Action context is a Server Action.
 
 ---
 
-## 51. Should Server Functions Be Used for General Data Fetching?
+### 51. Should Server Functions Be Used for General Data Fetching?
 
 React recommends them primarily for mutations. Server Components can read/fetch server data during rendering.
 
 ---
 
-## 52. Can Server Components Run Without a Long-Running Web Server?
+### 52. Can Server Components Run Without a Long-Running Web Server?
 
 Yes. They can run at build time in supported architectures.
 
 ---
 
-# Part 18 — Interview-Ready Summary
+## Part 18 — Interview-Ready Summary
 
-## 53. Interview Answer ⭐⭐⭐⭐⭐
+### 53. Interview Answer ⭐⭐⭐⭐⭐
 
 ```text
 React Server Components execute part of the React tree
@@ -1415,9 +1415,9 @@ both a performance boundary and a security boundary.
 
 ---
 
-# Part 19 — Complete RSC Mental Model
+## Part 19 — Complete RSC Mental Model
 
-## 54. Architecture Diagram ⭐⭐⭐⭐⭐
+### 54. Architecture Diagram ⭐⭐⭐⭐⭐
 
 ```text
                      DATA / SERVER RESOURCES
@@ -1471,7 +1471,7 @@ preserve compatible client state
 
 ---
 
-## 55. Key Takeaways ⭐⭐⭐⭐⭐
+### 55. Key Takeaways ⭐⭐⭐⭐⭐
 
 - RSC is an architecture for splitting React execution across server and client.
 - Server Components execute before client-side component execution/bundling.
