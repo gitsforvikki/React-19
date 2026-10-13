@@ -711,89 +711,199 @@ Interviewers often test this exact distinction.
 
 # Part 7 — RSC vs SSR
 
+RSC aur SSR confusing lag sakte hain because **dono mein server involved hota hai**, but they are **not the same thing**.
+
+> **RSC (React Server Components):** Components run in a server environment; React sends their rendered result using the RSC Payload.
+>
+> **SSR (Server-Side Rendering):** React produces HTML on the server so the browser can display the initial page.
+
+**Remember:** RSC is a component architecture/protocol; SSR is an HTML-rendering technique. They can work together.
+
 ## 25. Server Components Are Not the Same as SSR ⭐⭐⭐⭐⭐
 
-SSR means:
+### A. First understand SSR
 
-```text
-React component tree
-       ↓
-server renders HTML
-       ↓
-browser receives HTML
-       ↓
-client JS hydrates interactive tree
+Consider a simple UI:
+
+```jsx
+function Profile() {
+  return <h1>Hello Vikash</h1>;
+}
 ```
 
-RSC means:
+With SSR (at request time), a server renders HTML for the browser:
 
 ```text
-Server Components
-       ↓
-server component output/protocol
-       ↓
-combined with Client Components
-       ↓
-React reconstructs component tree
+Browser requests page
+        ↓
+Server renders React tree to HTML
+        ↓
+<h1>Hello Vikash</h1>
+        ↓
+Browser displays the HTML
+        ↓
+Client JavaScript hydrates interactive components (if any)
 ```
 
-They solve different problems.
+The goal is **ready-to-display HTML**. SSR does not mean that JavaScript never runs in the browser: interactive Client Components still need hydration.
+
+### B. Now understand RSC
+
+Example in a Next.js App Router application:
+
+```jsx
+// app/profile/page.jsx
+import { db } from "@/lib/db";
+
+export default async function Profile() {
+  const user = await db.user.findFirst();
+
+  return <h1>Hello {user.name}</h1>;
+}
+```
+
+This page is a **Server Component** by default in the App Router.
+
+1. The component runs in a server environment.
+2. The database query happens on the server.
+3. React produces an **RSC Payload** representing the Server Component result, along with references to Client Components where applicable.
+4. The browser does not need the Server Component's database connection or implementation code.
+
+**Important:** An RSC Payload is **not HTML**. It is a React-specific representation used to reconcile/reconstruct the rendered component tree.
+
+```text
+Server Component
+       ↓
+Runs on server; can read database
+       ↓
+React Server Components Payload (not HTML)
+       ↓
+Framework / React uses payload to build or update UI
+```
+
+Server Components can run at **build time or request time** depending on the framework and route configuration. So **RSC does not automatically mean request-time SSR**.
 
 ---
 
 ## 26. They Can Work Together
 
-An RSC framework may:
+Consider a page with static content and an interactive button:
 
-1. render Server Components,
-2. combine their output with Client Component references,
-3. server-render the resulting application to HTML for the initial page,
-4. send client JavaScript for interactive Client Components,
-5. hydrate those interactive pieces.
+```jsx
+// app/page.jsx — Server Component
+import Counter from "./Counter";
 
-Conceptually:
-
-```text
-RSC render
-    ↓
-React component result
-    ↓
-optional SSR
-    ↓
-HTML
-    ↓
-browser
-    ↓
-Client Component hydration
+export default function Home() {
+  return (
+    <main>
+      <h1>Welcome Vikash</h1>
+      <Counter />
+    </main>
+  );
+}
 ```
 
-So:
+```jsx
+// app/Counter.jsx — Client Component
+"use client";
+
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Count: {count}
+    </button>
+  );
+}
+```
+
+### What happens on the initial page load?
+
+In Next.js App Router, conceptually:
+
+```text
+Browser makes initial request
+            ↓
+RSC rendering on server
+  Server Component output + Client Component references
+            ↓
+RSC Payload
+            ↓
+HTML prerendering using the React tree
+            ↓
+HTML sent to browser
+            ↓
+Browser displays initial content
+            ↓
+Client JavaScript loads
+            ↓
+Hydration makes Counter interactive
+```
+
+These three steps have different jobs:
+
+- **RSC:** Prepare the Server Component result and Client Component references.
+- **HTML prerendering / SSR:** Produce initial HTML that the browser can display. Depending on the route, this may happen at build time or request time.
+- **Hydration:** Attach React's interactive behavior to Client Components in the browser.
+
+The browser can show **Welcome Vikash** and **Count: 0** before the Counter button is interactive. Once hydration completes, clicking it changes the count.
+
+**Later client-side navigation:** With Next.js `<Link>`, client-side transitions generally use an RSC Payload rather than requesting an entirely new HTML document. This is another reason RSC and SSR must not be treated as synonyms.
 
 ```text
 RSC ≠ SSR
-but
-RSC + SSR can cooperate
+
+But on an initial page load:
+RSC + HTML prerendering + hydration can cooperate.
 ```
 
 ---
 
 ## 27. "Client Component" Does Not Mean "Only Rendered in Browser" ⭐⭐⭐⭐⭐
 
-A common mistake:
+A common mistake is assuming:
 
 ```text
-Client Component
-=
-no server rendering
+"use client" = browser-only rendering
 ```
 
-Not necessarily.
+**Not necessarily.** In Next.js App Router, Client Components can participate in initial server-side HTML prerendering, then hydrate in the browser.
 
-A framework may use Client Components when producing initial server-rendered HTML and then hydrate them in the browser.
+- `"use client"` defines a Client Component boundary and enables hooks, event handlers, and browser interactivity.
+- It does **not** automatically disable server HTML rendering.
+- Browser-only APIs such as `window` still need to be accessed at the appropriate time (for example, inside `useEffect`).
 
-The important distinction is:
+### Quick comparison
 
-> Client Component code participates in the client module/runtime and can become interactive in the browser.
+| Question | RSC | SSR |
+| --- | --- | --- |
+| What is it? | Component architecture and protocol | HTML rendering technique |
+| Main purpose? | Run component logic on server and avoid shipping server-only code | Provide initial HTML |
+| Main output? | RSC Payload | HTML |
+| Can server code access a database? | Yes, in Server Components | Yes, in server-side rendering logic |
+| Can it coexist with Client Components? | Yes | Yes; Client Components can hydrate |
+| When does it happen? | Build or request time (framework-dependent) | Request-time SSR; frameworks may also prerender HTML at build time |
+
+### Interview answer ⭐⭐⭐⭐⭐
+
+**Q: Are React Server Components the same as Server-Side Rendering?**
+
+No. RSC decides where Server Component code executes and represents its output using the React Server Components Payload. SSR is about generating HTML on the server for the browser. A framework like Next.js can combine RSC, initial HTML prerendering, and Client Component hydration.
+
+**Three-line mental model:**
+
+```text
+RSC       → Server prepares component results.
+SSR       → Server prepares browser-visible HTML.
+Hydration → Browser activates interactive Client Components.
+```
+
+**Official references:**
+- [React — Server Components](https://react.dev/reference/rsc/server-components)
+- [Next.js — Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components)
 
 ---
 
